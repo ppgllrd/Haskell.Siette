@@ -5,3 +5,10 @@ import Data.List( head
 
 intercambia :: (a,b) -> (b,a)
 intercambia (x,y) = (y,x)
+
+data PP = PP
+
+instance Eq PP where
+  PP == PP = True
+
+data PPP = PPP

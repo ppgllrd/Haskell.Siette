@@ -3,13 +3,17 @@ module Main(_mainSiette) where
 import Test.QuickCheck((==>),Property)
 import SietteLib(qCheck,_doChecks_,Test_(QCheck_,Example_))
 
+--------------------------------------------------------------------------------
 -- student's imports
 import Test.QuickCheck
 import Data.List (head, tail)
+--------------------------------------------------------------------------------
 -- test's imports
+--------------------------------------------------------------------------------
 -- extra code
 p_intercambia x y = intercambia (x, y) == (y, x)
 
+--------------------------------------------------------------------------------
 -- tests
 _mainSiette = _doChecks_ ts
 	where
@@ -22,8 +26,17 @@ _mainSiette = _doChecks_ ts
 			, QCheck_ (qCheck (p_intercambia :: Char -> Char -> Bool)) "p_intercambia :: Char -> Char -> Bool" Nothing
 			]
 
+--------------------------------------------------------------------------------
 -- student's sol
+ 
+data PP = PP
+ 
+data PPP = PPP
+ 
+instance Eq PP where
+        PP == PP = True
  
 intercambia :: (a, b) -> (b, a)
 intercambia (x, y) = (y, x)
+
 

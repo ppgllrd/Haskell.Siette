@@ -11,39 +11,51 @@ import Prelude hiding (readFile)
 import System.IO hiding (readFile)
 import SietteParser
 
-
+main :: IO ()
 main = do
   args <- getArgs
-  when (length args /= 2) $ error "needs 2 parameters: <file sol> <file genTests>"
-  let fileStudentSol = args !! 0
-  studentSol <- readAFile fileStudentSol
-  let fileTests = args !! 1
-  txtTests <- readAFile fileTests
+  when (length args /= 2) $ error "needs 2 parameters: <file sol> <file tests>"
+  let studentFile = args !! 0
+  studentCode <- readAFile studentFile
+  let testFile = args !! 1
+  txtTests <- readAFile testFile
 
-  hsModStudent <- force $ parse fileStudentSol studentSol
-  let (studentImports,allStudentDecls) = extractImports hsModStudent
+  hsModStudent <- force $ parse studentFile studentCode
+  let studentImports = extractImports hsModStudent
   let studentDecls = getDeclarations hsModStudent
 
   let (testsAndChecks,extraCode) = breakWith tkBeginCode txtTests
   let mainTxt = genMain testsAndChecks
 
-  hsModExtra <- force $ parse fileTests extraCode
-  let (extraCodeImports,allExtraCodeDecls) = extractImports hsModExtra
+  hsModExtra <- force $ parse testFile extraCode
+  let extraCodeImports = extractImports hsModExtra
   let extraCodeDecls = getDeclarations hsModExtra
 
+  -- mapM_ putAssoc (M.toList extraCodeDecls)
+
   let newExtraCodeDecls = M.difference extraCodeDecls studentDecls
-  let newExtraCode = unlines . concat . map (map declaration2String) . M.elems $ newExtraCodeDecls
+
+  let dict2Code = unlines . concat . map (map declaration2String) . M.elems
+  let newExtraCode = dict2Code newExtraCodeDecls
+  let newStudentCode = dict2Code studentDecls
+
+  let sep = replicate 80 '-'
 
   putStrLn . filter (/='\r') . unlines $
                      [ sietteHeader
+                     , sep
                      , "-- student's imports"
                      ] ++ map importToString studentImports ++
-                     [ "-- test's imports"
+                     [ sep
+                     , "-- test's imports"
                      ] ++ map importToString extraCodeImports ++
-                     [ "-- extra code", newExtraCode
+                     [ sep
+                     , "-- extra code", newExtraCode
+                     , sep
                      , "-- tests", mainTxt
-                     , "-- student's sol"
-                     ] ++ map declaration2String allStudentDecls
+                     , sep
+                     , "-- student's sol", newStudentCode
+                     ]
 
 
 sietteHeader = unlines  [ "module Main(_mainSiette) where"
@@ -57,8 +69,6 @@ tkBeginCode = "--code--"
 tkQCheck = "qCheck"
 tkComment = " -- "
 tkImport = "import "
-
-
 
 readAFile :: FilePath -> IO String
 readAFile fn = do

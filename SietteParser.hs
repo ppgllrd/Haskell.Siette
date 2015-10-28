@@ -13,19 +13,19 @@ module SietteParser ( Identifier
 
                     , extractImports
                     , importToString
+                    , putAssoc
                     ) where
 
 import Language.Haskell.Parser
 import Language.Haskell.Pretty
 import Language.Haskell.Syntax
 import Data.Map hiding (map)
-
+import Data.List(nub)
 
 type Identifier = String
 
-
-  -- fn is a haskell file name and xs is a haskell program.
-  -- Returns parsed module
+-- fn is a haskell file name and xs is a haskell program.
+-- Returns parsed module
 parse :: FilePath -> String -> HsModule
 parse fn xs = do
       case parseModuleWithMode (ParseMode {parseFilename= fn}) xs of
@@ -50,8 +50,29 @@ name td@(HsTypeDecl _ hsName _ _)        = [ (toAnnoIdentifier "type" hsName, td
 name dd@(HsDataDecl _ _ hsName _ _ _)    = [ (toAnnoIdentifier "data" hsName, dd) ]
 name nd@(HsNewTypeDecl _ _ hsName _ _ _) = [ (toAnnoIdentifier "newtype" hsName, nd) ]
 name cd@(HsClassDecl _ _ hsName _ _)     = [ (toAnnoIdentifier "class" hsName, cd) ]
-name id@(HsInstDecl _ _ hsName _ _)      = [ (toAnnoIdentifier "instance" hsName, id) ]
+name id@(HsInstDecl _ _ hsName hsTypes _)= [ (toAnnoIdentifier "instance" hsName ++ unwords (map (prettyPrint.renameTyVars) hsTypes), id) ]
 name _                                   = [ ]
+
+-- Renames type variables in t, so that a -> b -> b
+-- and b -> a -> a, for instance, lead to same type
+renameTyVars :: HsType -> HsType
+renameTyVars t = ren (zip (vars t) [1..]) t
+ where
+   look x ys = let Just v = Prelude.lookup x ys in v
+
+   vars = nub . vars'
+
+   vars' (HsTyFun t1 t2)        = vars' t1 ++ vars' t2
+   vars' (HsTyTuple ts)         = concatMap vars' ts
+   vars' (HsTyApp t1 t2)        = vars' t1 ++ vars' t2
+   vars' (HsTyVar (HsIdent xs)) = [xs]
+   vars' (HsTyCon qnm)          = []
+
+   ren d (HsTyFun t1 t2)        = HsTyFun (ren d t1) (ren d t2)
+   ren d (HsTyTuple ts)         = HsTyTuple (map (ren d) ts)
+   ren d (HsTyApp t1 t2)        = HsTyApp (ren d t1) (ren d t2)
+   ren d (HsTyVar (HsIdent xs)) = HsTyVar (HsIdent ("t"++show (look xs d)))
+   ren d t                      = t
 
 nameOf :: HsMatch -> Identifier
 nameOf (HsMatch srcLoc hsName hsPats hsRhs hsDecls) = toIdentifier hsName
@@ -90,12 +111,18 @@ instance ToIdentifier HsQName where
 toAnnoIdentifier :: (ToIdentifier a) => String -> a -> String
 toAnnoIdentifier annon x = '_' : annon ++ toIdentifier x
 
-extractImports :: HsModule -> ([HsImportDecl], [HsDecl])
-extractImports (HsModule srcLoc modul maybeHsExportSpecs hsImportDecls hsDecls) = ( hsImportDecls, hsDecls )
+extractImports :: HsModule -> [HsImportDecl]
+extractImports (HsModule srcLoc modul maybeHsExportSpecs hsImportDecls hsDecls) = hsImportDecls
 
 importToString :: HsImportDecl -> String
 importToString hsImportDecl = prettyPrint hsImportDecl
 
+-- for debugging purposes
+putAssoc :: (Identifier,[HsDecl]) -> IO ()
+putAssoc (id, decls) = do
+  putStrLn (replicate 80 '-')
+  putStrLn id
+  putStrLn . unlines $ map declaration2String decls
 
 
 {-
