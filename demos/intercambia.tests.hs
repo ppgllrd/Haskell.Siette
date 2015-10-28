@@ -7,4 +7,4 @@ qCheck (p_intercambia :: Char -> Char -> Bool)
 
 --code--
 
-p_intercambia x y = intercambia (x,y) == (x,y)
+p_intercambia x y = intercambia (x,y) == (y,x)

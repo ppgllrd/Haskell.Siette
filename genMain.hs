@@ -5,9 +5,12 @@ import System.Environment(getArgs)
 import Control.Monad(when, unless)
 import System.Directory(doesFileExist)
 import Data.List(isPrefixOf, isInfixOf, intercalate)
+import qualified Data.Map as M
 import Data.Char(isSpace)
 import Prelude hiding (readFile)
 import System.IO hiding (readFile)
+import SietteParser
+
 
 main = do
   args <- getArgs
@@ -16,21 +19,31 @@ main = do
   studentSol <- readAFile fileStudentSol
   let fileTests = args !! 1
   txtTests <- readAFile fileTests
-  let (testsImports,txtTests') = extractImports txtTests
-  let (testsAndChecks,extraCode) = breakWith tkBeginCode (unlines txtTests')
-  --let studentSol' = unlines . filter (not . isPrefixOf tkImport) . lines $ studentSol
-  let (studentImports,studentSol') = extractImports studentSol
+
+  hsModStudent <- force $ parse fileStudentSol studentSol
+  let (studentImports,allStudentDecls) = extractImports hsModStudent
+  let studentDecls = getDeclarations hsModStudent
+
+  let (testsAndChecks,extraCode) = breakWith tkBeginCode txtTests
   let mainTxt = genMain testsAndChecks
+
+  hsModExtra <- force $ parse fileTests extraCode
+  let (extraCodeImports,allExtraCodeDecls) = extractImports hsModExtra
+  let extraCodeDecls = getDeclarations hsModExtra
+
+  let newExtraCodeDecls = M.difference extraCodeDecls studentDecls
+  let newExtraCode = unlines . concat . map (map declaration2String) . M.elems $ newExtraCodeDecls
+
   putStrLn . filter (/='\r') . unlines $
                      [ sietteHeader
                      , "-- student's imports"
-                     ] ++ studentImports ++
+                     ] ++ map importToString studentImports ++
                      [ "-- test's imports"
-                     ] ++ testsImports ++
-                     [ "-- extra code", extraCode
+                     ] ++ map importToString extraCodeImports ++
+                     [ "-- extra code", newExtraCode
                      , "-- tests", mainTxt
                      , "-- student's sol"
-                     ] ++ studentSol'
+                     ] ++ map declaration2String allStudentDecls
 
 
 sietteHeader = unlines  [ "module Main(_mainSiette) where"
@@ -45,6 +58,8 @@ tkQCheck = "qCheck"
 tkComment = " -- "
 tkImport = "import "
 
+
+
 readAFile :: FilePath -> IO String
 readAFile fn = do
   exist <- doesFileExist fn
@@ -57,10 +72,13 @@ readAFile fn = do
   hClose handle
   xs
 
+force :: a -> IO a
+force x = x `seq` return x
+
 genMain :: String -> String
 genMain xs = unlines [ "_mainSiette = _doChecks_ ts"
                      , "\twhere"
-                     , "\t\tts = "++toList tests
+                     , "\t\tts = "++asList tests
                      ]
   where
     validLines = filter validLine . map (dropWhile isSpace) . lines $ xs
@@ -109,8 +127,8 @@ mkComment xs
 validLine :: String -> Bool
 validLine xs = not (null xs) && any (not . isSpace) xs
 
-toList :: [String] -> String
-toList xs = indent "[ " ++ intercalate (indent ", ") xs ++ indent "]"
+asList :: [String] -> String
+asList xs = indent "[ " ++ intercalate (indent ", ") xs ++ indent "]"
  where
   indent xs = "\n\t\t\t"++xs
 
@@ -138,6 +156,8 @@ removeParents xs
   | head xs == '(' && last xs == ')' = tail (init xs)
   | otherwise                        = xs
 
+
+{-
 -- Extract imports from source file contents
 -- An import is a line beginning with tkImport and nexts lines that
 -- either are empty or that start with space (indented ones)
@@ -151,3 +171,4 @@ extractImports xs = aux ls
       | otherwise               = let (xs,ys) = aux ls in (xs, l:ys)
       where
         (cont,ls') = span (\l -> null l || isSpace (head l)) ls
+-}
