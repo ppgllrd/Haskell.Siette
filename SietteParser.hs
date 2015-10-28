@@ -42,11 +42,16 @@ declaration2String decl = prettyPrint decl
 
 -- Annotates each declaration with its identifier
 name :: HsDecl -> [ (Identifier, HsDecl) ]
-name ts@(HsTypeSig _ hsNames _)         = [ (toIdentifier hsNm, ts) | hsNm <- hsNames ]
-name fb@(HsFunBind xs)                  = [ (nameOf (head xs),  fb) ]
-name pb@(HsPatBind _ (HsPVar pvar) _ _) = [ (toIdentifier pvar, pb) ]
-name id@(HsInfixDecl _ _ _ hsOps)       = [ (toIdentifier hsOp, id) | hsOp <- hsOps ]
-name _                                  = [ ]
+name ts@(HsTypeSig _ hsNames _)          = [ (toIdentifier hsNm, ts) | hsNm <- hsNames ]
+name fb@(HsFunBind xs)                   = [ (nameOf (head xs),  fb) ]
+name pb@(HsPatBind _ (HsPVar pvar) _ _)  = [ (toIdentifier pvar, pb) ]
+name id@(HsInfixDecl _ _ _ hsOps)        = [ (toIdentifier hsOp, id) | hsOp <- hsOps ]
+name td@(HsTypeDecl _ hsName _ _)        = [ (toAnnoIdentifier "type" hsName, td)]
+name dd@(HsDataDecl _ _ hsName _ _ _)    = [ (toAnnoIdentifier "data" hsName, dd) ]
+name nd@(HsNewTypeDecl _ _ hsName _ _ _) = [ (toAnnoIdentifier "newtype" hsName, nd) ]
+name cd@(HsClassDecl _ _ hsName _ _)     = [ (toAnnoIdentifier "class" hsName, cd) ]
+name id@(HsInstDecl _ _ hsName _ _)      = [ (toAnnoIdentifier "instance" hsName, id) ]
+name _                                   = [ ]
 
 nameOf :: HsMatch -> Identifier
 nameOf (HsMatch srcLoc hsName hsPats hsRhs hsDecls) = toIdentifier hsName
@@ -74,8 +79,16 @@ instance ToIdentifier HsName where
   toIdentifier (HsIdent xs) = xs
 
 instance ToIdentifier HsOp where
-  toIdentifier (HsVarOp xs) = toIdentifier xs
-  toIdentifier (HsConOp xs) = toIdentifier xs
+  toIdentifier (HsVarOp nm) = toIdentifier nm
+  toIdentifier (HsConOp nm) = toIdentifier nm
+
+instance ToIdentifier HsQName where
+  toIdentifier (Qual (Module xs) nm) = xs++"."++toIdentifier nm
+  toIdentifier (UnQual nm)           = toIdentifier nm
+  toIdentifier (Special con)         = show con
+
+toAnnoIdentifier :: (ToIdentifier a) => String -> a -> String
+toAnnoIdentifier annon x = '_' : annon ++ toIdentifier x
 
 extractImports :: HsModule -> ([HsImportDecl], [HsDecl])
 extractImports (HsModule srcLoc modul maybeHsExportSpecs hsImportDecls hsDecls) = ( hsImportDecls, hsDecls )
